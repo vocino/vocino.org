@@ -1,0 +1,41 @@
+# Local env and secrets (never commit)
+.env
+.env.*
+!.env.example
+.dev.vars
+*.pem
+*.p12
+*.key
+
+# Wrangler / Cloudflare local
+.wrangler/
+.mf/
+
+# Dependencies and build output (when added)
+node_modules/
+dist/
+build/
+.turbo/
+.next/
+out/
+
+# OS and editors
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json.example
+
+# Logs and dumps
+*.log
+npm-debug.log*
+dump.sql
+*.sqlite
+*.db
+
+# Credential exports / accidental copies
+*credentials*
+*secret*export*
