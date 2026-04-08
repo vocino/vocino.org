@@ -23,6 +23,87 @@ Starting with **Threads** and **LinkedIn** keeps V1 realistic while covering two
 - **Scheduling & queue** — Schedule publishes and process them through a reliable queue + triggers.
 - **Status** — Minimal visibility: published, failed, retry—enough to trust the system without building a full analytics product.
 
+The subsections below capture **target product behavior** for each V1 platform (similar in spirit to mature schedulers such as Buffer), always bounded by what each vendor’s **API and app review** actually allow. **Threads** is Meta Graph–centric and tied to Instagram; **LinkedIn** is the more policy- and matrix-heavy surface.
+
+### Threads integration (target behavior)
+
+**Accounts & connection**
+
+- Authenticate via **Meta** (Threads is tied to **Instagram**): user must have a Threads profile linked to Instagram as Meta expects.
+- Typically **public** Threads accounts only for third-party publishing flows—do not promise private-profile support unless the API explicitly allows it.
+- Request the minimum OAuth scopes your app needs (e.g. account/read vs publish); product docs often cite scopes such as **`threads_basic`** and **`threads_content_publish`**—confirm names and combinations against [Meta’s current Threads API documentation](https://developers.facebook.com/docs/threads).
+
+**Publishing features**
+
+| Spec | Target |
+|------|--------|
+| Max text length | **500 characters** (enforce in composer). |
+| Images / videos per post | Up to **10** items (carousel) where the API allows. |
+| Video length | Up to **~5 minutes** (validate server-side). |
+| Video aspect ratio | Roughly **0.01:1** through **10:1** (reject out-of-range uploads early when possible). |
+| Thread chains | Support scheduling a **thread** (sequence of posts); product goal **up to ~50** posts in one scheduled thread, published in order with correct reply/parent linkage per API. |
+| Mentions | **`@username`** in copy where the API supports mentions. |
+| Links | URLs in text become **clickable links** when the platform renders them (no fake “preview builder” unless the API exposes one). |
+| Direct scheduling | **Yes** — publish at scheduled time via API (no “mobile notification tap to post” workflow as the primary path). |
+
+**Known limitations (communicate in UI)**
+
+- **No in-dashboard analytics** for Threads in V1 if the API does not expose performance metrics you are allowed to use.
+- **No engagement inbox** — no replying, liking, or unified “Threads inbox” from this app unless APIs and scope expand later.
+- **No image alt text** if the publishing API does not support it.
+- **No platform “tags” / location** features that Meta does not expose to third-party publishers.
+- **No “first comment”** scheduling as a separate feature (unlike LinkedIn-style flows)—Threads behavior is thread-of-posts instead.
+- **Rate limits / throttling** — same discipline as LinkedIn: backoff, spacing, clear errors.
+
+**Workflow**
+
+- **Drafts** and **scheduled** posts (and **multi-post threads**) are in scope; define queue semantics so partial thread failure is visible and recoverable.
+- **Analytics** and **engagement** are **out of scope** for V1 unless you later add scopes and storage for data Meta actually returns.
+
+---
+
+### LinkedIn integration (target behavior)
+
+**Accounts & connection**
+
+- Support **LinkedIn Profile** and **LinkedIn Page** destinations where the API permits.
+- For **Pages**, assume the connecting user has sufficient admin (e.g. Super Admin / Content Admin—exact names depend on LinkedIn’s product UI).
+- Use **OAuth**; expect **periodic re-authentication** when refresh fails or policies expire (often on the order of weeks, not “set and forget forever”).
+
+**Post types (profiles vs pages)**
+
+Exact matrix depends on LinkedIn API version and app approval; the **product goal** is parity where the platform allows:
+
+| Capability | Target |
+|------------|--------|
+| Text | Yes, enforce **~3,000 characters** (validate in composer). |
+| Images | Yes; **up to 9** images per post where supported. |
+| Video | Yes where supported. |
+| Links | Yes; **link preview** (title/description/thumbnail) when the API exposes it. |
+| First comment | Yes as a **second step**: publish main post, then post the “first comment” once the parent id is known (same scheduling story, two API actions). |
+| @mentions | **Pages only** where the API allows; **do not promise** @mention of personal profiles (LinkedIn restricts this for third parties). |
+| Image alt text | Yes for accessibility when the API supports it. |
+| Document / PDF carousel | Yes when the API supports document posts. |
+
+**Media validation (backend / UX guardrails)**
+
+Use these as defaults to fail fast before upload; adjust when LinkedIn’s docs change.
+
+- **Images:** e.g. **≤ 10 MB**; **JPG, PNG, non-animated GIF**; aspect ratio guidance **~1.91:1 to 4:5** where relevant.
+- **Video:** e.g. **≤ 200 MB**; **~3 s–10 min** duration; common containers (**MP4**, **WebM**, **MKV**, etc.); resolution roughly **256×144** through **4096×2304**; frame rate **~10–60 fps**.
+
+**Known limitations (communicate in UI)**
+
+- No **Stories** or **Live** via third-party APIs (do not surface as options).
+- **Throttling / rate limits** — backoff, queue spacing, and clear user-visible errors when LinkedIn returns quota or abuse signals.
+- **No personal-profile @mentions** if the API cannot deliver them.
+
+**Workflow**
+
+- **Drafts** and **scheduled** publishes (specific datetime + queue) are in scope for V1.
+- **Multi-user approvals** remain out of scope for now (see Non-goals); solo draft → schedule → publish is the path.
+- **Analytics** (likes, comments, impressions, clicks) is a **stretch** after reliable publish + status; depends on API access and storage.
+
 ---
 
 ## Non-goals (for now)
