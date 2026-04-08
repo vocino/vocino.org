@@ -2,7 +2,7 @@
 
 **A personal-first social publishing dashboard for professional channels.**
 
-Organizing Vocino is a small app for planning, scheduling, and publishing posts across the social accounts that matter for your work—starting with **Threads** and **LinkedIn**. Think of it as a focused alternative to juggling multiple tabs and native schedulers: one place to compose, queue, and track what went out.
+Organizing Vocino is a small app for **owning how and when you post**. **V1** is deliberately narrow: a **Threads** publishing flow that feels like **Buffer**—you build a **backlog** of posts, define **when** they should go out across the day, and the system **publishes automatically** via the Meta API. **LinkedIn** and other networks stay on the roadmap until that core loop feels solid.
 
 The project lives at [vocino.org](https://vocino.org) and is built for **Vocino’s own workflow first**. The code is open source so others can learn from it, fork it, or self-host with their own API credentials—without routing traffic through anyone else’s keys or quotas.
 
@@ -12,18 +12,33 @@ The project lives at [vocino.org](https://vocino.org) and is built for **Vocino�
 
 Posting consistently across professional networks is fragmented: each platform has different limits, media rules, and scheduling UX. This repo is an experiment in **owning that workflow**: a single dashboard that scrolls through accounts and content state, similar in spirit to tools like Buffer—but scoped to what actually gets used for work, with room to grow.
 
-Starting with **Threads** and **LinkedIn** keeps V1 realistic while covering two high-signal professional surfaces.
+**V1** optimizes for one habit: **keep a queue of Threads posts and let software post them on a rhythm you trust**, instead of context-switching into the app all day.
 
 ---
 
-## V1 features (planned)
+## V1 features (planned) — Threads queue & schedule
 
-- **Connections** — Link Threads and LinkedIn accounts via platform OAuth (credentials stored only in your environment / Cloudflare secrets, not in the repo).
-- **Composer** — Draft posts; optional per-platform variants (length, mentions, media).
-- **Scheduling & queue** — Schedule publishes and process them through a reliable queue + triggers.
-- **Status** — Minimal visibility: published, failed, retry—enough to trust the system without building a full analytics product.
+**Primary goal**
 
-The subsections below capture **target product behavior** for each V1 platform (similar in spirit to mature schedulers such as Buffer), always bounded by what each vendor’s **API and app review** actually allow. **Threads** is Meta Graph–centric and tied to Instagram; **LinkedIn** is the more policy- and matrix-heavy surface.
+- **Backlog + automatic posting** — Add many posts to a **queue**; at **configured times** (or equivalent triggers), the next ready item publishes to **Threads** without manual action—same mental model as Buffer’s queue and posting schedule.
+
+**Core mechanics**
+
+- **Threads connection** — One account via **Meta OAuth** (credentials only in Cloudflare Secrets / `.dev.vars`, never in git).
+- **Composer** — Create and edit queued posts within Threads limits (text, media, optional multi-post threads—see behavior section below).
+- **Posting schedule** — You define **slots** (e.g. “9:00, 13:00, 18:00” in your timezone). When a slot fires, if the backlog has a **ready** item, publish it and record success/failure.
+- **Ordering** — Clear **FIFO** (or explicit reorder) so “what goes next” is predictable.
+- **Status** — Minimal: queued, published, failed, retry—enough to trust the system, not a full analytics product.
+
+**Bonus (stretch within or right after V1)**
+
+- **Dynamic / gap-based publishing** — In addition to (or instead of) fixed clock slots, support a rule such as: **if the last successful publish was more than *X* hours ago** and the backlog is non-empty, **publish the next post** (subject to optional **daily caps** so the queue cannot empty itself into spam). Exact UX (toggle per account, combine with slots, quiet hours) can be decided during implementation.
+
+The **Threads** subsection below covers API-facing limits and limitations. **LinkedIn** is specified for a **later phase** so the README stays a useful contract without pretending V1 ships two networks.
+
+---
+
+## Platform behavior (Threads V1, LinkedIn later)
 
 ### Threads integration (target behavior)
 
@@ -46,6 +61,12 @@ The subsections below capture **target product behavior** for each V1 platform (
 | Links | URLs in text become **clickable links** when the platform renders them (no fake “preview builder” unless the API exposes one). |
 | Direct scheduling | **Yes** — publish at scheduled time via API (no “mobile notification tap to post” workflow as the primary path). |
 
+**Scheduling semantics (V1)**
+
+- **Fixed slots** — Cron (or queue consumers on a timer) fires at your **wall-clock times** in a chosen **timezone**; each tick asks the queue for the **next** eligible item and calls Threads publish.
+- **Gap-based (bonus)** — A separate check (same or lower-frequency cron) compares **now** to **timestamp of last successful publish**; if elapsed ≥ **X hours** and the backlog is non-empty, dequeue and publish—optionally capped by **max posts per day** so rules cannot fight each other.
+- **Interaction** — Slots and gap rules should be **explicitly ordered** in product logic (e.g. slot wins, or gap only fills between slots) so behavior is debuggable.
+
 **Known limitations (communicate in UI)**
 
 - **No in-dashboard analytics** for Threads in V1 if the API does not expose performance metrics you are allowed to use.
@@ -53,16 +74,19 @@ The subsections below capture **target product behavior** for each V1 platform (
 - **No image alt text** if the publishing API does not support it.
 - **No platform “tags” / location** features that Meta does not expose to third-party publishers.
 - **No “first comment”** scheduling as a separate feature (unlike LinkedIn-style flows)—Threads behavior is thread-of-posts instead.
-- **Rate limits / throttling** — same discipline as LinkedIn: backoff, spacing, clear errors.
+- **Rate limits / throttling** — backoff, spacing between publishes, clear errors; respect Meta limits.
 
 **Workflow**
 
-- **Drafts** and **scheduled** posts (and **multi-post threads**) are in scope; define queue semantics so partial thread failure is visible and recoverable.
+- **V1 backlog** — Posts live in a **queue**; **fixed daily slots** (and optionally **gap-since-last-post** rules) decide **when** the next item is published. One-off “post at this exact timestamp” can reuse the same machinery (single slot or immediate enqueue + flush).
+- **Multi-post Threads** (a thread of up to ~50 posts) can be modeled as **one queue item** that expands to an ordered publish sequence; **partial failure** must be visible (which segment failed, what to retry).
 - **Analytics** and **engagement** are **out of scope** for V1 unless you later add scopes and storage for data Meta actually returns.
 
 ---
 
-### LinkedIn integration (target behavior)
+### LinkedIn integration (post-V1 specification)
+
+_Not part of shipping V1; kept so product and API constraints are documented when you add a second network._
 
 **Accounts & connection**
 
@@ -98,16 +122,17 @@ Use these as defaults to fail fast before upload; adjust when LinkedIn’s docs 
 - **Throttling / rate limits** — backoff, queue spacing, and clear user-visible errors when LinkedIn returns quota or abuse signals.
 - **No personal-profile @mentions** if the API cannot deliver them.
 
-**Workflow**
+**Workflow** _(when LinkedIn ships)_
 
-- **Drafts** and **scheduled** publishes (specific datetime + queue) are in scope for V1.
-- **Multi-user approvals** remain out of scope for now (see Non-goals); solo draft → schedule → publish is the path.
-- **Analytics** (likes, comments, impressions, clicks) is a **stretch** after reliable publish + status; depends on API access and storage.
+- Reuse the same **backlog + schedule** ideas as Threads where LinkedIn’s API allows (per-post datetime, queue slots, or both).
+- **Multi-user approvals** remain out of scope until well after solo publishing is solid (see Non-goals).
+- **Analytics** (likes, comments, impressions, clicks) is a **stretch** after reliable cross-network publish + status.
 
 ---
 
 ## Non-goals (for now)
 
+- **LinkedIn (and other networks) as V1 publish targets** — V1 ships **Threads only**; everything else stays specification or roadmap.
 - Full **SaaS** onboarding, billing, or multi-tenant product polish.
 - **Every** social platform on day one (Instagram, Discord, X, etc. come later if they still fit).
 - **Team** collaboration (roles, approvals, shared calendars)—solo / personal use first.
@@ -121,21 +146,23 @@ The intended stack for the hosted instance is **Cloudflare**:
 | Piece | Role |
 |--------|------|
 | **Workers** | HTTP API, auth callbacks, webhooks if needed |
-| **Durable Objects** | Coordination for publish queue / per-user or global sequencing |
-| **D1** | Metadata: drafts, schedules, publish attempts, platform account refs |
+| **Durable Objects** | Coordination for **backlog order**, **last-publish time** (for gap rules), and **slot-driven** publishes |
+| **D1** | Metadata: queue items, posting schedule config, publish attempts, Threads account ref |
 | **R2** *(optional)* | Media uploads / attachments |
-| **Queues + Cron** | Scheduled publishing and retries |
+| **Queues + Cron** | **Daily slot ticks**, optional **gap-based** checks, retries |
+
+_V1 runtime path is Threads-only; additional adapters plug in later without changing the queue model._
 
 ```mermaid
 flowchart TD
   user[UserDashboard] --> composer[PostComposer]
   composer --> queue[PublishQueueDO]
+  composer --> r2[R2_optional_media]
   queue --> scheduler[CronOrQueueTrigger]
-  scheduler --> adapters[PlatformAdapters]
-  adapters --> threads[ThreadsAPI]
-  adapters --> linkedin[LinkedInAPI]
   queue --> state[D1State]
-  adapters --> media[R2MediaOptional]
+  scheduler --> threads[ThreadsAPI]
+  r2 -.-> threads
+  scheduler -.-> linkedinLater[LinkedIn_postV1]
 ```
 
 Forks and self-hosters can swap hosting details; the README stays honest that **your** deployment is Cloudflare-first.
@@ -181,7 +208,7 @@ If anything sensitive is ever pushed, **rotate credentials immediately** and con
 > The app code is not in this repo yet; this section describes the intended path once Workers + frontend exist.
 
 1. Clone the repo and install dependencies (exact commands will live in the project root once added).
-2. Create developer apps for **Threads** (Meta) and **LinkedIn**; note client ID, client secret, and redirect URLs matching your Worker routes.
+2. Create a **Meta** developer app for **Threads** publishing; note client ID, client secret, and OAuth redirect URLs matching your Worker routes. (LinkedIn and other providers wait until you extend past V1.)
 3. Set secrets via `wrangler secret put …` (or the Cloudflare dashboard)—**never** commit them.
 4. Apply D1 migrations and deploy Workers + any Pages frontend.
 
@@ -193,8 +220,8 @@ Details will be expanded when `wrangler` config and source land in the tree.
 
 | Phase | Focus |
 |--------|--------|
-| **Now** | README + repo hygiene; scaffold Cloudflare app; Threads + LinkedIn OAuth + publish MVP |
-| **Next** | Instagram, Discord, or other platforms if APIs and use case still align |
+| **Now** | README + repo hygiene; scaffold Cloudflare app; **Threads OAuth**; **backlog + daily posting slots**; publish MVP; optional **gap-since-last-post** mode |
+| **Next** | **LinkedIn** (reuse queue/schedule model), then Instagram / Discord / others if APIs and use case still align |
 | **Later** | Optional hosted offering for others (BYO keys or small fee)—out of scope until core is stable |
 
 ---
