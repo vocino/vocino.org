@@ -149,7 +149,7 @@ The intended stack for the hosted instance is **Cloudflare**:
 | **Durable Objects** | Coordination for **backlog order**, **last-publish time** (for gap rules), and **slot-driven** publishes |
 | **D1** | Metadata: queue items, posting schedule config, publish attempts, Threads account ref |
 | **R2** *(optional)* | Media uploads / attachments |
-| **Queues + Cron** | **Daily slot ticks**, optional **gap-based** checks, retries |
+| **Cron** | **Slot ticks** and optional **gap-based** checks; **Queues** only if cron + DO is not enough later |
 
 _V1 runtime path is Threads-only; additional adapters plug in later without changing the queue model._
 
@@ -165,7 +165,11 @@ flowchart TD
   scheduler -.-> linkedinLater[LinkedIn_postV1]
 ```
 
-Forks and self-hosters can swap hosting details; the README stays honest that **your** deployment is Cloudflare-first.
+Forks and self-hosters can swap hosting details; the README stays honest that **your** deployment is Cloudflare-first. For a **single-user** hosting layout (one Worker, bindings, cron, domain), see [docs/hosting.md](docs/hosting.md).
+
+### Design (frontend)
+
+The dashboard UI can take **layout, component, and Tailwind v4 structure** cues from TailAdmin (React + Vite) while **colors, typography, and atmosphere** follow **[vocino.com](https://vocino.com)**. See [docs/design.md](docs/design.md) for token tables, font stacks, and a practical mapping checklist.
 
 ---
 
@@ -210,7 +214,7 @@ If anything sensitive is ever pushed, **rotate credentials immediately** and con
 1. Clone the repo and install dependencies (exact commands will live in the project root once added).
 2. Create a **Meta** developer app for **Threads** publishing; note client ID, client secret, and OAuth redirect URLs matching your Worker routes. (LinkedIn and other providers wait until you extend past V1.)
 3. Set secrets via `wrangler secret put …` (or the Cloudflare dashboard)—**never** commit them.
-4. Apply D1 migrations and deploy Workers + any Pages frontend.
+4. Apply D1 migrations and deploy (see [docs/hosting.md](docs/hosting.md) for the recommended **single Worker + static assets** layout).
 
 Details will be expanded when `wrangler` config and source land in the tree.
 
